@@ -1,0 +1,5 @@
+Flask==2.3.2
+python-dotenv==1.0.1
+supabase==1.0.3
+werkzeug==2.3.7
+Pillow==10.2.0

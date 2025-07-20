@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Monitoring PC</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+    h1 { color: #333; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
+    tr:hover { background-color: #eef; }
+    .filter-box { margin-top: 20px; }
+    .filter-box input { padding: 5px; margin-right: 10px; }
+    .btn { padding: 6px 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+    .btn:hover { background: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard Monitoring PC</h1>
+  <div class="filter-box">
+    <form method="get" action="/">
+      <input type="text" name="search" placeholder="Cari nama user" />
+      <button type="submit" class="btn">Cari</button>
+    </form>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Nama Pengguna</th>
+        <th>PC Name</th>
+        <th>Jumlah Log</th>
+        <th>Terakhir Aktif</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+  {% for user in users %}
+  <tr>
+    <td>{{ user.username }}</td>
+    <td>{{ user.pc_name }}</td>
+    <td>{{ user.log_count }}</td>
+    <td>{{ user.last_active }}</td>
+    <td><a href="/user/{{ user.username }}" class="btn">Lihat</a></td>
+  </tr>
+  {% else %}
+  <tr>
+    <td colspan="5">Tidak ada data</td>
+  </tr>
+  {% endfor %}
+</tbody>
+
+  </table>
+</body>
+</html>
