@@ -5,51 +5,187 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Dashboard Monitoring PC</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
-    h1 { color: #333; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
-    tr:hover { background-color: #eef; }
-    .filter-box { margin-top: 20px; }
-    .filter-box input { padding: 5px; margin-right: 10px; }
-    .btn { padding: 6px 10px; background: #007bff; color: white; border: none; cursor: pointer; }
-    .btn:hover { background: #0056b3; }
+    /* Reset margin dan padding */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* Body dengan background gradient */
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #2c3e50, #4ca1af); /* Gradient Background */
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start; /* Mengatur posisi flex-start agar rapat ke atas */
+      padding: 10px;
+    }
+
+    /* Container utama */
+    .container {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 20px; /* Mengurangi padding agar lebih rapat */
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      width: 80%;
+      max-width: 1200px;
+      backdrop-filter: blur(5px); /* Blur background */
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+    }
+
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-top: 5px; /* Mengatur jarak atas judul */
+      font-size: 36px;
+      font-weight: bold;
+    }
+
+    /* Form Filter (Search and Date) */
+    .filter-box {
+      margin-bottom: 10px; /* Mengurangi jarak bawah form pencarian */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #fff;
+    }
+
+    .filter-box input {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 45%;
+      font-size: 16px;
+      background-color: #fff;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn:hover {
+      background-color: #2980b9;
+    }
+
+    /* Tabel Data Pengguna */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px; /* Mengurangi jarak atas tabel */
+    }
+
+    th,
+    td {
+      padding: 12px;
+      text-align: left;
+      font-size: 16px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    th {
+      background-color: #34495e;
+      font-size: 18px;
+    }
+
+    tr:nth-child(even) {
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    tr:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .status-on {
+      color: #2ecc71;
+      font-weight: bold;
+    }
+
+    .status-off {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+
+    /* Responsif */
+    @media (max-width: 768px) {
+      .filter-box {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .filter-box input {
+        width: 100%;
+        margin-bottom: 10px;
+      }
+
+      /* Sesuaikan ukuran tombol untuk perangkat mobile */
+      .btn {
+        width: 100%;
+        margin-top: 10px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Dashboard Monitoring PC</h1>
-  <div class="filter-box">
-    <form method="get" action="/">
-      <input type="text" name="search" placeholder="Cari nama user" />
-      <button type="submit" class="btn">Cari</button>
-    </form>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Nama Pengguna</th>
-        <th>PC Name</th>
-        <th>Jumlah Log</th>
-        <th>Terakhir Aktif</th>
-        <th>Detail</th>
-      </tr>
-    </thead>
-    <tbody>
-  {% for user in users %}
-  <tr>
-    <td>{{ user.username }}</td>
-    <td>{{ user.pc_name }}</td>
-    <td>{{ user.log_count }}</td>
-    <td>{{ user.last_active }}</td>
-    <td><a href="/user/{{ user.username }}" class="btn">Lihat</a></td>
-  </tr>
-  {% else %}
-  <tr>
-    <td colspan="5">Tidak ada data</td>
-  </tr>
-  {% endfor %}
-</tbody>
+  <div class="container">
+     <h1>Dashboard Monitoring PC</h1>
 
-  </table>
+    <br>
+    <!-- Form Pencarian dan Filter Tanggal -->
+    <div class="filter-box">
+      <form method="get" action="/logs" style="width: 100%;">
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+          <input type="text" name="search" placeholder="Cari nama user" value="{{ search }}" />
+          <input type="date" name="date" value="{{ date_filter }}" />
+          <button type="submit" class="btn">Cari</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Tabel Data Pengguna -->
+    <table>
+      <thead>
+        <tr>
+          <th>Nama Pengguna</th>
+          <th>PC Name</th>
+          <th>Jumlah Log</th>
+          <th>Terakhir Aktif</th>
+          <th>Status</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if users %}
+          {% for user in users %}
+            <tr>
+              <td>{{ user.username }}</td>
+              <td>{{ user.pc_name }}</td>
+              <td>{{ user.log_count }}</td>
+              <td>{{ user.last_active }}</td>
+              <td class="{{ 'status-on' if user.status == 'ON' else 'status-off' }}">{{ user.status }}</td>
+              <td><a href="/user/{{ user.username }}" class="btn">Lihat</a></td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6">Tidak ada data yang ditemukan</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </body>
 </html>

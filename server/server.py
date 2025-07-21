@@ -92,20 +92,36 @@ def receive_log():
 
 @app.route("/logs")
 def logs_dashboard():
-    search = request.args.get("search", "").lower()
+    search = request.args.get("search", "").lower()  # Mendapatkan parameter pencarian
+    date_filter = request.args.get("date")  # Mendapatkan parameter tanggal (YYYY-MM-DD)
+    
+    # Mengambil log dari database Supabase
     result = supabase.table("logs").select("*").order("timestamp", desc=True).execute()
     error = getattr(result, "error", None)
     data = getattr(result, "data", [])
 
     if error:
         return jsonify({"error": str(error)}), 500
-    if data is None:
-        return jsonify({"error": "No data returned"}), 500
+    if not data:
+        return jsonify({"error": "No data found"}), 500
 
+    # Filter berdasarkan pencarian
     if search:
         data = [log for log in data if search in (log.get("username") or "").lower()]
 
-    summary = defaultdict(lambda: {"log_count": 0, "last_active": None})
+    # Filter berdasarkan tanggal, jika ada
+    if date_filter:
+        try:
+            date_obj = datetime.strptime(date_filter, "%Y-%m-%d")
+            data = [log for log in data if datetime.fromisoformat(log["timestamp"]).date() == date_obj.date()]
+        except ValueError:
+            return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
+
+    # Ringkasan log per pengguna
+    summary = defaultdict(lambda: {"log_count": 0, "last_active": None, "status": "OFF"})
+
+    # Tentukan waktu aktif maksimal 5 menit yang lalu
+    max_inactive_duration = timedelta(minutes=5)
 
     for log in data:
         key = (log["username"], log["pc_name"])
@@ -114,6 +130,15 @@ def logs_dashboard():
         if summary[key]["last_active"] is None or current_ts > summary[key]["last_active"]:
             summary[key]["last_active"] = current_ts
 
+    # Tentukan status aktif (ON/OFF)
+    for (username, pc_name), info in summary.items():
+        last_active = info["last_active"]
+        if last_active and (datetime.utcnow() - last_active) <= max_inactive_duration:
+            info["status"] = "ON"  # Pengguna aktif
+        else:
+            info["status"] = "OFF"  # Pengguna tidak aktif
+
+    # Menyiapkan data pengguna untuk ditampilkan
     users = []
     for (username, pc_name), info in summary.items():
         users.append({
@@ -121,9 +146,13 @@ def logs_dashboard():
             "pc_name": pc_name,
             "log_count": info["log_count"],
             "last_active": info["last_active"].strftime("%Y-%m-%d %H:%M:%S"),
+            "status": info["status"],  # Status aktif
         })
 
-    return render_template("logs.html", users=users, search=search)
+    return render_template("logs.html", users=users, search=search, date_filter=date_filter)
+
+
+
 
 
 @app.route("/user/<username>")
@@ -143,10 +172,10 @@ def user_logs(username):
         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == "__main__":
-    # Mulai auto-delete di background
-    threading.Thread(target=auto_delete_old_logs, daemon=True).start()
+# Auto-delete thread selalu jalan, baik di gunicorn atau dev
+threading.Thread(target=auto_delete_old_logs, daemon=True).start()
 
-    # Jalankan Flask
-    port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port)
+if __name__ == "__main__":
+    # Jalankan Flask hanya kalau di mode dev (tanpa gunicorn)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+

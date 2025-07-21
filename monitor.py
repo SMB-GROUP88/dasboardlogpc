@@ -6,17 +6,19 @@ from pystray import MenuItem as item
 from PIL import Image as PILImage
 import tkinter as tk
 from tkinter import simpledialog
-import requests
 
-SERVER_URL = "http://192.168.29.231:5000/logs"
+# ====== Konfigurasi ======
+SERVER_URL = "https://dasboardlogpc-logpc.up.railway.app/logs"
 APP_NAME = "PCMonitor"
 CONFIG_DIR = os.path.join(os.getenv("APPDATA") or os.path.expanduser("~/.config"), APP_NAME)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-ICON_FILE = "togelup.png"  # ganti dengan path ikon PNG kamu jika punya
+ICON_FILE = "togelup.png"  # Ganti path icon PNG jika ada
 
+# ====== Status global ======
 monitoring = False
 monitor_thread = None
 
+# ====== Fungsi Utility ======
 def get_active_window():
     try:
         window = gw.getActiveWindow()
@@ -72,6 +74,7 @@ def send_log_to_server(name, pc_name, active_window, timestamp, screenshot):
     except Exception as e:
         print(f"[ERROR] Gagal kirim log: {e}")
 
+# ====== Monitoring ======
 def monitor_loop():
     global monitoring
     name = load_user_name()
@@ -87,6 +90,7 @@ def monitor_loop():
             last_window = active_window
         time.sleep(3)
 
+# ====== Kontrol Monitoring ======
 def start_monitoring(icon=None, item=None):
     global monitoring, monitor_thread
     if not monitoring:
@@ -105,6 +109,7 @@ def exit_app(icon=None, item=None):
     icon.stop()
     print("[INFO] Aplikasi dihentikan.")
 
+# ====== Icon System Tray ======
 def create_image():
     if os.path.exists(ICON_FILE):
         try:
@@ -112,7 +117,7 @@ def create_image():
         except Exception as e:
             print(f"[WARNING] Gagal load togelup.png, fallback ke ikon biru. Error: {e}")
     
-    # fallback icon
+    # fallback icon biru
     image = PILImage.new('RGB', (64, 64), "blue")
     return image
 
@@ -125,5 +130,8 @@ def run_tray_app():
     icon = pystray.Icon("monitor_app", create_image(), "PC Monitor", menu)
     icon.run()
 
+# ====== Jalankan Aplikasi ======
 if __name__ == "__main__":
-    run_tray_app()
+    load_user_name()       # Pop-up nama pengguna hanya jika belum disimpan
+    start_monitoring()     # Monitoring langsung mulai otomatis
+    run_tray_app()         # Tampilkan system tray
