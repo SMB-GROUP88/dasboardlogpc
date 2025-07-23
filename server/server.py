@@ -30,19 +30,29 @@ def remove_whitelist_ip(ip):
 def auto_delete_old_logs():
     while True:
         try:
-            today = datetime.utcnow().date()
-            cutoff_date = today - timedelta(days=3)
-            cutoff_str = cutoff_date.isoformat()
+            # Waktu UTC sekarang (misal 2025-07-23 21:00)
+            now_utc = datetime.utcnow()
+            
+            # Ambil batas waktu (cutoff) 3 hari lalu dari sekarang, tapi hanya ambil tanggalnya
+            cutoff_date = (now_utc - timedelta(days=3)).date()  # ex: 2025-07-20
 
-            print(f"[AUTO DELETE] Menghapus log sebelum: {cutoff_str}")
+            # Konversi ke string ISO format untuk tanggal (tanpa waktu)
+            cutoff_str = cutoff_date.isoformat()  # "2025-07-20"
 
-            supabase.table("logs").delete().lt("timestamp", cutoff_str).execute()
+            print(f"[AUTO DELETE] Menghapus log yang tanggalnya lebih kecil dari: {cutoff_str}")
 
-            print(f"[AUTO DELETE] Log sebelum {cutoff_str} berhasil dihapus.")
+            # Hapus log yang TANGGAL timestamp-nya lebih kecil dari cutoff (sudah masuk hari ke-4)
+            response = supabase.table("logs").delete().lt("timestamp", cutoff_str).execute()
+
+            deleted = len(response.data or [])
+            print(f"[AUTO DELETE] {deleted} log dihapus sebelum {cutoff_str}")
+
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
 
-        time.sleep(24 * 60 * 60)  # Cek setiap 24 jam
+        # Jalankan lagi besok (setiap 24 jam)
+        time.sleep(24 * 60 * 60)
+
 
 @app.before_request
 def block_unallowed():
