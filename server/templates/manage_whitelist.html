@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manage Whitelist IP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .card {
+      width: 400px;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      border-radius: 12px;
+      padding: 30px;
+    }
+    .card h2 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #333;
+      font-weight: 700;
+    }
+    .form-inline input {
+      flex-grow: 1;
+    }
+    table {
+      margin-top: 20px;
+    }
+    .btn-back {
+      display: block;
+      margin: 25px auto 0;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Manage Whitelist IP</h2>
+
+    <!-- Form Add IP -->
+    <form method="POST" class="form-inline mb-3">
+      <input 
+        type="text" 
+        name="ip" 
+        class="form-control mr-2" 
+        placeholder="Enter IP to add" 
+        required 
+        pattern="^(\d{1,3}\.){3}\d{1,3}$" 
+        title="Enter a valid IP address" 
+      />
+      <input type="hidden" name="action" value="add" />
+      <button type="submit" class="btn btn-primary">Add IP</button>
+    </form>
+
+    <!-- Whitelist Table -->
+    <table class="table table-hover table-sm">
+      <thead class="thead-light">
+        <tr>
+          <th>IP Address</th>
+          <th style="width: 110px;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ip in ips %}
+        <tr>
+          <td>{{ ip }}</td>
+          <td>
+            <form method="POST" style="display:inline;">
+              <input type="hidden" name="ip" value="{{ ip }}" />
+              <input type="hidden" name="action" value="remove" />
+              <button 
+                type="submit" 
+                class="btn btn-danger btn-sm" 
+                onclick="return confirm('Remove IP {{ ip }}?')"
+              >
+                Remove
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="2" class="text-center text-muted">No IPs in whitelist</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <a href="/logs" class="btn btn-outline-secondary btn-back">Back to Dashboard</a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

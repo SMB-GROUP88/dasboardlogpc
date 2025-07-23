@@ -17,20 +17,53 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+def get_whitelist_ips():
+    res = supabase.table("ip_whitelist").select("ip").execute()
+    return [row["ip"] for row in (res.data or [])]
+
+def add_whitelist_ip(ip):
+    return supabase.table("ip_whitelist").insert({"ip": ip}).execute()
+
+def remove_whitelist_ip(ip):
+    return supabase.table("ip_whitelist").delete().eq("ip", ip).execute()
 
 def auto_delete_old_logs():
     while True:
         try:
-            cutoff_date = datetime.utcnow() - timedelta(days=3)
+            today = datetime.utcnow().date()
+            cutoff_date = today - timedelta(days=3)
             cutoff_str = cutoff_date.isoformat()
 
-            response = supabase.table("logs").delete().lt("timestamp", cutoff_str).execute()
+            print(f"[AUTO DELETE] Menghapus log sebelum: {cutoff_str}")
+
+            supabase.table("logs").delete().lt("timestamp", cutoff_str).execute()
+
             print(f"[AUTO DELETE] Log sebelum {cutoff_str} berhasil dihapus.")
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
-        
-        time.sleep(24 * 60 * 60)  # setiap 24 jam
 
+        time.sleep(24 * 60 * 60)  # Cek setiap 24 jam
+
+@app.before_request
+def block_unallowed():
+    if request.endpoint == "logs_dashboard":
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        allowed_ips = get_whitelist_ips()
+        print(f"Client IP: {client_ip}, Allowed IPs: {allowed_ips}")
+        if client_ip not in allowed_ips:
+            abort(403, description="Access denied: your IP is not allowed.")
+
+@app.route("/admin/whitelist", methods=["GET", "POST"])
+def manage_whitelist():
+    if request.method == "POST":
+        ip = request.form.get("ip")
+        action = request.form.get("action")
+        if action == "add" and ip:
+            add_whitelist_ip(ip)
+        elif action == "remove" and ip:
+            remove_whitelist_ip(ip)
+    ips = get_whitelist_ips()
+    return render_template("manage_whitelist.html", ips=ips)
 
 @app.route("/logs", methods=["POST"])
 def receive_log():
@@ -43,8 +76,6 @@ def receive_log():
         timestamp = request.form.get("timestamp")
         screenshot = request.files.get("screenshot")
 
-        print(f"Received data: name={name}, pc_name={pc_name}, window={window}, timestamp={timestamp}")
-
         if not screenshot:
             return "No screenshot received", 400
 
@@ -52,25 +83,15 @@ def receive_log():
         filename = secure_filename(f"{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png")
         file_path = f"screenshots/{filename}"
 
-        print(f"Uploading file to Supabase Storage at path: {file_path}")
-
-        try:
-            upload_response = supabase.storage.from_("screenshots").upload(file_path, screenshot_bytes)
-        except Exception as e:
-            print(f"Exception during upload: {e}")
-            return jsonify({"error": f"Upload failed: {str(e)}"}), 500
+        supabase.storage.from_("screenshots").upload(file_path, screenshot_bytes)
 
         public_url_response = supabase.storage.from_("screenshots").get_public_url(file_path)
-
-        public_url = None
         if isinstance(public_url_response, dict):
             public_url = public_url_response.get("publicUrl")
         elif hasattr(public_url_response, "data") and isinstance(public_url_response.data, dict):
             public_url = public_url_response.data.get("publicUrl")
         else:
             public_url = str(public_url_response)
-
-        print(f"Public URL: {public_url}")
 
         insert_response = supabase.table("logs").insert({
             "username": name,
@@ -89,13 +110,11 @@ def receive_log():
         print(f"Error occurred: {e}")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/logs")
 def logs_dashboard():
-    search = request.args.get("search", "").lower()  # Mendapatkan parameter pencarian
-    date_filter = request.args.get("date")  # Mendapatkan parameter tanggal (YYYY-MM-DD)
-    
-    # Mengambil log dari database Supabase
+    search = request.args.get("search", "").lower()
+    date_filter = request.args.get("date")
+
     result = supabase.table("logs").select("*").order("timestamp", desc=True).execute()
     error = getattr(result, "error", None)
     data = getattr(result, "data", [])
@@ -105,11 +124,9 @@ def logs_dashboard():
     if not data:
         return jsonify({"error": "No data found"}), 500
 
-    # Filter berdasarkan pencarian
     if search:
         data = [log for log in data if search in (log.get("username") or "").lower()]
 
-    # Filter berdasarkan tanggal, jika ada
     if date_filter:
         try:
             date_obj = datetime.strptime(date_filter, "%Y-%m-%d")
@@ -117,10 +134,7 @@ def logs_dashboard():
         except ValueError:
             return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
 
-    # Ringkasan log per pengguna
     summary = defaultdict(lambda: {"log_count": 0, "last_active": None, "status": "OFF"})
-
-    # Tentukan waktu aktif maksimal 5 menit yang lalu
     max_inactive_duration = timedelta(minutes=5)
 
     for log in data:
@@ -130,15 +144,13 @@ def logs_dashboard():
         if summary[key]["last_active"] is None or current_ts > summary[key]["last_active"]:
             summary[key]["last_active"] = current_ts
 
-    # Tentukan status aktif (ON/OFF)
     for (username, pc_name), info in summary.items():
         last_active = info["last_active"]
         if last_active and (datetime.utcnow() - last_active) <= max_inactive_duration:
-            info["status"] = "ON"  # Pengguna aktif
+            info["status"] = "ON"
         else:
-            info["status"] = "OFF"  # Pengguna tidak aktif
+            info["status"] = "OFF"
 
-    # Menyiapkan data pengguna untuk ditampilkan
     users = []
     for (username, pc_name), info in summary.items():
         users.append({
@@ -146,14 +158,10 @@ def logs_dashboard():
             "pc_name": pc_name,
             "log_count": info["log_count"],
             "last_active": info["last_active"].strftime("%Y-%m-%d %H:%M:%S"),
-            "status": info["status"],  # Status aktif
+            "status": info["status"],
         })
 
     return render_template("logs.html", users=users, search=search, date_filter=date_filter)
-
-
-
-
 
 @app.route("/user/<username>")
 def user_logs(username):
@@ -171,11 +179,8 @@ def user_logs(username):
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-
-# Auto-delete thread selalu jalan, baik di gunicorn atau dev
+# Jalankan thread auto-delete log
 threading.Thread(target=auto_delete_old_logs, daemon=True).start()
 
 if __name__ == "__main__":
-    # Jalankan Flask hanya kalau di mode dev (tanpa gunicorn)
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-

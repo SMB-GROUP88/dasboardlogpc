@@ -12,7 +12,16 @@ SERVER_URL = "https://dasboardlogpc-logpc.up.railway.app/logs"
 APP_NAME = "PCMonitor"
 CONFIG_DIR = os.path.join(os.getenv("APPDATA") or os.path.expanduser("~/.config"), APP_NAME)
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-ICON_FILE = "togelup.png"  # Ganti path icon PNG jika ada
+ICON_FILE = "togelup.png"  # Pakai PNG untuk tray icon
+
+# ====== Utility function for PyInstaller resource path ======
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # ====== Status global ======
 monitoring = False
@@ -111,12 +120,12 @@ def exit_app(icon=None, item=None):
 
 # ====== Icon System Tray ======
 def create_image():
-    if os.path.exists(ICON_FILE):
+    icon_path = resource_path(ICON_FILE)
+    if os.path.exists(icon_path):
         try:
-            return PILImage.open(ICON_FILE)
+            return PILImage.open(icon_path)
         except Exception as e:
-            print(f"[WARNING] Gagal load togelup.png, fallback ke ikon biru. Error: {e}")
-    
+            print(f"[WARNING] Gagal load {ICON_FILE}, fallback ke ikon biru. Error: {e}")
     # fallback icon biru
     image = PILImage.new('RGB', (64, 64), "blue")
     return image
