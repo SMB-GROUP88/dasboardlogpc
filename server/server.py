@@ -31,19 +31,34 @@ def auto_delete_old_logs():
     while True:
         try:
             now_utc = datetime.utcnow()
-            cutoff_date = (now_utc - timedelta(days=3)).date()  # contoh: 2025-07-20
-            cutoff_str = f"{cutoff_date}T00:00:00"  # tambahkan waktu
+            cutoff_date = (now_utc - timedelta(days=3)).date()
 
-            print(f"[AUTO DELETE] Menghapus log sebelum: {cutoff_str}")
+            print(f"[AUTO DELETE] Menghapus log dengan tanggal < {cutoff_date}")
 
-            response = supabase.table("logs").delete().lt("timestamp", cutoff_str).execute()
-            deleted = len(response.data or [])
-            print(f"[AUTO DELETE] {deleted} log dihapus.")
+            # Ambil semua log
+            result = supabase.table("logs").select("id, timestamp").execute()
+            logs = result.data or []
+
+            logs_to_delete = []
+            for log in logs:
+                try:
+                    ts = datetime.fromisoformat(log["timestamp"])
+                    if ts.date() < cutoff_date:
+                        logs_to_delete.append(log["id"])
+                except Exception as e:
+                    print(f"Skipping log with bad timestamp: {log}, error: {e}")
+
+            print(f"[AUTO DELETE] Akan menghapus {len(logs_to_delete)} log")
+
+            # Hapus batch (bisa juga satu-satu jika ingin lebih aman)
+            for log_id in logs_to_delete:
+                supabase.table("logs").delete().eq("id", log_id).execute()
 
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
 
         time.sleep(24 * 60 * 60)
+
 
 
 
