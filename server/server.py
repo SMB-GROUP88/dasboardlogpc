@@ -9,6 +9,7 @@ import traceback
 import threading
 import time
 from dateutil import parser
+from datetime import timezone
 
 load_dotenv()
 app = Flask(__name__)
@@ -30,7 +31,8 @@ def remove_whitelist_ip(ip):
 def auto_delete_old_logs():
     while True:
         try:
-            cutoff_datetime = datetime.utcnow() - timedelta(days=3)
+            # Buat cutoff_datetime dengan timezone UTC agar bisa dibandingkan dengan timestamp offset-aware
+            cutoff_datetime = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=3)
             print(f"[AUTO DELETE] Menghapus log dengan timestamp < {cutoff_datetime}")
 
             result = supabase.table("logs").select("id, timestamp").execute()
@@ -43,6 +45,7 @@ def auto_delete_old_logs():
                     if not raw_ts:
                         continue  # skip jika timestamp kosong/null
                     ts = parser.parse(raw_ts)
+                    # ts sudah offset-aware, cutoff_datetime juga sudah offset-aware
                     if ts < cutoff_datetime:
                         print(f"[DELETE] Log ID {log['id']} dengan timestamp {ts} masuk daftar hapus")
                         logs_to_delete.append(log["id"])
