@@ -8,6 +8,7 @@ from collections import defaultdict
 import traceback
 import threading
 import time
+from dateutil import parser
 
 load_dotenv()
 
@@ -137,15 +138,23 @@ def logs_dashboard():
     if error:
         return jsonify({"error": str(error)}), 500
     if not data:
-        return jsonify({"error": "No data found"}), 500
+        return render_template("logs.html", users=[], search=search, date_filter=date_filter)
 
     if search:
         data = [log for log in data if search in (log.get("username") or "").lower()]
 
     if date_filter:
         try:
-            date_obj = datetime.strptime(date_filter, "%Y-%m-%d")
-            data = [log for log in data if datetime.fromisoformat(log["timestamp"]).date() == date_obj.date()]
+            date_obj = datetime.strptime(date_filter, "%Y-%m-%d").date()
+            filtered_data = []
+            for log in data:
+                try:
+                    ts = parser.parse(log["timestamp"]).date()
+                    if ts == date_obj:
+                        filtered_data.append(log)
+                except Exception as e:
+                    print(f"Timestamp parsing error: {e}")
+            data = filtered_data
         except ValueError:
             return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
 
@@ -155,7 +164,12 @@ def logs_dashboard():
     for log in data:
         key = (log["username"], log["pc_name"])
         summary[key]["log_count"] += 1
-        current_ts = datetime.fromisoformat(log["timestamp"])
+        try:
+            current_ts = parser.parse(log["timestamp"])
+        except Exception as e:
+            print(f"Error parsing timestamp: {e}")
+            continue
+
         if summary[key]["last_active"] is None or current_ts > summary[key]["last_active"]:
             summary[key]["last_active"] = current_ts
 
@@ -172,7 +186,7 @@ def logs_dashboard():
             "username": username,
             "pc_name": pc_name,
             "log_count": info["log_count"],
-            "last_active": info["last_active"].strftime("%Y-%m-%d %H:%M:%S"),
+            "last_active": info["last_active"].strftime("%Y-%m-%d %H:%M:%S") if info["last_active"] else "-",
             "status": info["status"],
         })
 
