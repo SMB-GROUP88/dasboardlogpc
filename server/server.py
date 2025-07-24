@@ -39,7 +39,10 @@ def auto_delete_old_logs():
             logs_to_delete = []
             for log in logs:
                 try:
-                    ts = parser.parse(log["timestamp"])
+                    raw_ts = log.get("timestamp")
+                    if not raw_ts:
+                        continue  # skip jika timestamp kosong/null
+                    ts = parser.parse(raw_ts)
                     if ts < cutoff_datetime:
                         print(f"[DELETE] Log ID {log['id']} dengan timestamp {ts} masuk daftar hapus")
                         logs_to_delete.append(log["id"])
@@ -99,7 +102,9 @@ def receive_log():
         supabase.storage.from_("screenshots").upload(file_path, screenshot_bytes)
 
         public_url_response = supabase.storage.from_("screenshots").get_public_url(file_path)
-        public_url = getattr(public_url_response, "data", {}).get("publicUrl", str(public_url_response))
+        public_url = getattr(public_url_response, "data", {}).get("publicUrl")
+        if not public_url:
+            public_url = str(public_url_response)  # fallback jika tidak dapat
 
         insert_response = supabase.table("logs").insert({
             "username": name,
@@ -141,7 +146,10 @@ def logs_dashboard():
             filtered_data = []
             for log in data:
                 try:
-                    ts = parser.parse(log["timestamp"]).date()
+                    raw_ts = log.get("timestamp")
+                    if not raw_ts:
+                        continue
+                    ts = parser.parse(raw_ts).date()
                     if ts == date_obj:
                         filtered_data.append(log)
                 except Exception as e:
@@ -157,7 +165,10 @@ def logs_dashboard():
         key = (log["username"], log["pc_name"])
         summary[key]["log_count"] += 1
         try:
-            current_ts = parser.parse(log["timestamp"])
+            raw_ts = log.get("timestamp")
+            if not raw_ts:
+                continue
+            current_ts = parser.parse(raw_ts)
         except Exception as e:
             print(f"Error parsing timestamp: {e}")
             continue
@@ -200,6 +211,7 @@ def user_logs(username):
 
 # Jalankan thread auto-delete log
 threading.Thread(target=auto_delete_old_logs, daemon=True).start()
+print("[AUTO DELETE THREAD] Started background auto-delete task...")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
