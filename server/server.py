@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template, abort
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from supabase import create_client
 from werkzeug.utils import secure_filename
 import os
@@ -9,7 +9,6 @@ import traceback
 import threading
 import time
 from dateutil import parser
-from datetime import timezone
 
 load_dotenv()
 app = Flask(__name__)
@@ -28,11 +27,16 @@ def add_whitelist_ip(ip):
 def remove_whitelist_ip(ip):
     return supabase.table("ip_whitelist").delete().eq("ip", ip).execute()
 
+def parse_timestamp(raw_ts):
+    try:
+        return parser.parse(raw_ts)
+    except Exception:
+        return None
+
 def auto_delete_old_logs():
     while True:
         try:
-            # Buat cutoff_datetime dengan timezone UTC agar bisa dibandingkan dengan timestamp offset-aware
-            cutoff_datetime = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=3)
+            cutoff_datetime = datetime.now(timezone.utc) - timedelta(days=3)
             print(f"[AUTO DELETE] Menghapus log dengan timestamp < {cutoff_datetime}")
 
             result = supabase.table("logs").select("id, timestamp").execute()
@@ -40,17 +44,16 @@ def auto_delete_old_logs():
 
             logs_to_delete = []
             for log in logs:
-                try:
-                    raw_ts = log.get("timestamp")
-                    if not raw_ts:
-                        continue  # skip jika timestamp kosong/null
-                    ts = parser.parse(raw_ts)
-                    # ts sudah offset-aware, cutoff_datetime juga sudah offset-aware
-                    if ts < cutoff_datetime:
-                        print(f"[DELETE] Log ID {log['id']} dengan timestamp {ts} masuk daftar hapus")
-                        logs_to_delete.append(log["id"])
-                except Exception as e:
-                    print(f"[SKIP] Bad timestamp format: {log}, error: {e}")
+                raw_ts = log.get("timestamp")
+                if not raw_ts:
+                    continue  # skip jika timestamp kosong/null
+                ts = parse_timestamp(raw_ts)
+                if ts is None:
+                    print(f"[SKIP] Bad timestamp format: {log}")
+                    continue
+                if ts < cutoff_datetime:
+                    print(f"[DELETE] Log ID {log['id']} dengan timestamp {ts} masuk daftar hapus")
+                    logs_to_delete.append(log["id"])
 
             print(f"[AUTO DELETE] Total log dihapus: {len(logs_to_delete)}")
 
@@ -60,8 +63,7 @@ def auto_delete_old_logs():
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
 
-        # Jalankan setiap hari
-        time.sleep(60 * 60 * 24)
+        time.sleep(60 * 60 * 24)  # jalankan setiap 24 jam
 
 @app.before_request
 def block_unallowed():
@@ -99,7 +101,7 @@ def receive_log():
             return "No screenshot received", 400
 
         screenshot_bytes = screenshot.read()
-        filename = secure_filename(f"{name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.png")
+        filename = secure_filename(f"{name}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}.png")
         file_path = f"screenshots/{filename}"
 
         supabase.storage.from_("screenshots").upload(file_path, screenshot_bytes)
@@ -148,15 +150,14 @@ def logs_dashboard():
             date_obj = datetime.strptime(date_filter, "%Y-%m-%d").date()
             filtered_data = []
             for log in data:
-                try:
-                    raw_ts = log.get("timestamp")
-                    if not raw_ts:
-                        continue
-                    ts = parser.parse(raw_ts).date()
-                    if ts == date_obj:
-                        filtered_data.append(log)
-                except Exception as e:
-                    print(f"Timestamp parsing error: {e}")
+                raw_ts = log.get("timestamp")
+                if not raw_ts:
+                    continue
+                ts = parse_timestamp(raw_ts)
+                if ts is None:
+                    continue
+                if ts.date() == date_obj:
+                    filtered_data.append(log)
             data = filtered_data
         except ValueError:
             return jsonify({"error": "Invalid date format, expected YYYY-MM-DD"}), 400
@@ -167,13 +168,11 @@ def logs_dashboard():
     for log in data:
         key = (log["username"], log["pc_name"])
         summary[key]["log_count"] += 1
-        try:
-            raw_ts = log.get("timestamp")
-            if not raw_ts:
-                continue
-            current_ts = parser.parse(raw_ts)
-        except Exception as e:
-            print(f"Error parsing timestamp: {e}")
+        raw_ts = log.get("timestamp")
+        if not raw_ts:
+            continue
+        current_ts = parse_timestamp(raw_ts)
+        if current_ts is None:
             continue
 
         if summary[key]["last_active"] is None or current_ts > summary[key]["last_active"]:
@@ -181,7 +180,7 @@ def logs_dashboard():
 
     for (username, pc_name), info in summary.items():
         last_active = info["last_active"]
-        if last_active and (datetime.utcnow() - last_active) <= max_inactive_duration:
+        if last_active and (datetime.now(timezone.utc) - last_active) <= max_inactive_duration:
             info["status"] = "ON"
         else:
             info["status"] = "OFF"
