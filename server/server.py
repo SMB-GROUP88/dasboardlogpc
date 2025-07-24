@@ -11,7 +11,6 @@ import time
 from dateutil import parser
 
 load_dotenv()
-
 app = Flask(__name__)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -31,34 +30,32 @@ def remove_whitelist_ip(ip):
 def auto_delete_old_logs():
     while True:
         try:
-            now_utc = datetime.utcnow()
             cutoff_datetime = datetime.utcnow() - timedelta(days=3)
+            print(f"[AUTO DELETE] Menghapus log dengan timestamp < {cutoff_datetime}")
 
-            print(f"[AUTO DELETE] Menghapus log dengan tanggal < {cutoff_date}")
-
-            # Ambil semua log
             result = supabase.table("logs").select("id, timestamp").execute()
             logs = result.data or []
 
             logs_to_delete = []
             for log in logs:
                 try:
-                    ts = datetime.fromisoformat(log["timestamp"])
-                    if ts.date() < cutoff_date:
+                    ts = parser.parse(log["timestamp"])
+                    if ts < cutoff_datetime:
+                        print(f"[DELETE] Log ID {log['id']} dengan timestamp {ts} masuk daftar hapus")
                         logs_to_delete.append(log["id"])
                 except Exception as e:
-                    print(f"Skipping log with bad timestamp: {log}, error: {e}")
+                    print(f"[SKIP] Bad timestamp format: {log}, error: {e}")
 
-            print(f"[AUTO DELETE] Akan menghapus {len(logs_to_delete)} log")
+            print(f"[AUTO DELETE] Total log dihapus: {len(logs_to_delete)}")
 
-            # Hapus batch (bisa juga satu-satu jika ingin lebih aman)
             for log_id in logs_to_delete:
                 supabase.table("logs").delete().eq("id", log_id).execute()
 
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
 
-        time.sleep(60 * 60 * 24 * 3)  # 3 hari
+        # Jalankan setiap hari
+        time.sleep(60 * 60 * 24)
 
 @app.before_request
 def block_unallowed():
@@ -89,25 +86,20 @@ def receive_log():
         name = request.form.get("name")
         pc_name = request.form.get("pc_name")
         window = request.form.get("active_window")
-        timestamp = request.form.get("timestamp")
+        timestamp = request.form.get("timestamp")  # Harus UTC ISO 8601 dari klien
         screenshot = request.files.get("screenshot")
 
         if not screenshot:
             return "No screenshot received", 400
 
         screenshot_bytes = screenshot.read()
-        filename = secure_filename(f"{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png")
+        filename = secure_filename(f"{name}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.png")
         file_path = f"screenshots/{filename}"
 
         supabase.storage.from_("screenshots").upload(file_path, screenshot_bytes)
 
         public_url_response = supabase.storage.from_("screenshots").get_public_url(file_path)
-        if isinstance(public_url_response, dict):
-            public_url = public_url_response.get("publicUrl")
-        elif hasattr(public_url_response, "data") and isinstance(public_url_response.data, dict):
-            public_url = public_url_response.data.get("publicUrl")
-        else:
-            public_url = str(public_url_response)
+        public_url = getattr(public_url_response, "data", {}).get("publicUrl", str(public_url_response))
 
         insert_response = supabase.table("logs").insert({
             "username": name,
@@ -199,9 +191,7 @@ def user_logs(username):
         result = supabase.table("logs").select("*").ilike("username", username_lower).order("timestamp", desc=True).execute()
         if getattr(result, "error", None):
             return f"Error: {result.error}", 500
-        logs = getattr(result, "data", [])
-        if logs is None:
-            logs = []
+        logs = getattr(result, "data", []) or []
         return render_template("user_logs.html", username=username, logs=logs)
     except Exception as e:
         print("Error occurred:", e)
