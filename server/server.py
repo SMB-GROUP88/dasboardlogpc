@@ -31,7 +31,7 @@ def auto_delete_old_logs():
     while True:
         try:
             now_utc = datetime.utcnow()
-            cutoff_date = (now_utc - timedelta(days=3)).date()
+            cutoff_datetime = datetime.utcnow() - timedelta(days=3)
 
             print(f"[AUTO DELETE] Menghapus log dengan tanggal < {cutoff_date}")
 
@@ -57,10 +57,7 @@ def auto_delete_old_logs():
         except Exception as e:
             print(f"[AUTO DELETE ERROR] {e}")
 
-        time.sleep(24 * 60 * 60)
-
-
-
+        time.sleep(60 * 60 * 24 * 3)  # 3 hari
 
 @app.before_request
 def block_unallowed():
